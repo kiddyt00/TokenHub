@@ -23,6 +23,7 @@ import (
 )
 
 type Server struct {
+	monitoringObservations           monitoringObservationCache
 	semanticRouter                   semanticEvaluator
 	pluginRuntimeMu                  sync.RWMutex
 	pluginLifecycleMu                sync.Mutex
@@ -495,6 +496,7 @@ func modelIDFromPath(r *http.Request) (string, error) {
 }
 
 type modelListItem struct {
+	pricingUnavailable   bool
 	ID                   string `json:"id"`
 	Created              int64  `json:"created"`
 	Object               string `json:"object"`
@@ -517,6 +519,7 @@ func buildModelListItem(model Model) modelListItem {
 		inputPrice = model.EmbeddingPriceUSDPer1M
 	}
 	return modelListItem{
+		pricingUnavailable:   model.pricingUnavailable,
 		ID:                   model.Name,
 		Created:              modelCreatedUnix(model),
 		Object:               "model",

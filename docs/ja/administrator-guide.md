@@ -249,7 +249,7 @@ TokenHub はモデルのライフサイクルを 3 つの管理領域に分離�
 
 組み込みの StepFun エントリでは、通常 API と Step Plan の認証情報を明確に分離します。`StepFun (China)` と `StepFun (Global)` は従量課金の `/v1` エンドポイントを使用し、`StepFun Step Plan (China)` と `StepFun Step Plan (Global)` はサブスクリプション専用の `/step_plan/v1` エンドポイントを使用します。通常 API と Step Plan の Key および Base URL は相互利用できないため、Key の環境に一致するエントリを選択してください。
 
-Provider モデルの価格は実際の上流コストを表し、内部監査に使用します。Model Directory の価格は統一された外部請求額を表し、顧客の請求見積もり、クォータ計算、メトリクス、利用量レポートに使用します。ルートは上流実装を選択しますが、外部価格は変更しません。
+Provider モデルの価格は実際の上流コストを表し、内部監査に使用します。Model Directory の価格は統一された外部請求額を表し、顧客の請求見積もり、クォータ計算、メトリクス、利用量レポートに使用します。ルートは上流実装を選択しますが、外部価格は変更しません。chat モデルでは、指定した確認済み Provider モデルの料金ポリシーに全ルートで追従できます。時間帯別料金の編集、受け付け時のスナップショット、参照元の障害、制限については [Provider の時間帯別料金と公開価格の追従](billing-pricing.md#provider-の時間帯別料金と公開価格の追従) を参照してください。
 
 Provider Channels、Model Directory、Routing Policies に設定データがない場合、コンソールには同じ 3 ステップのガイドが表示されます。Provider インベントリの取り込み、参照カタログまたは Provider からの外部モデル作成、ルーティング設定の順です。主アクションは常に最初の未完了前提条件へ移動するため、まだ完了できないフォームに管理者を誘導しません。
 
@@ -303,9 +303,11 @@ Jev は意味に基づく選択の前に、リクエストのエンドポイン�
 
 インポート済み Provider モデルの metadata では、明示的な `endpoints` とともに `request_parameter_profile: openai-chat-responses-v1` を指定できます。このオプトイン設定は `include`、`truncation`、`service_tier`、`safety_identifier` などの共通制御と、ツール能力に基づく制御フィールドを提供します。Responses の `text.format` で構造化形式を要求する場合は構造化出力能力が必要です。サンプリングフィールドはモデル固有です。`reasoning_effort_options` と `reasoning_effort_default` は推論レベルを示し、`sampling_requires_reasoning_effort` はサンプリング条件を、`chat_tools_requires_reasoning_effort` は Chat ツール呼び出しに必要なレベルまたは `unsupported` を指定します。任意の `request_parameter_denied` はカンマ区切りの拒否リストで、許可規則より優先されます。この設定は上流アカウントの権限を付与せず、上流のスキーマ検証も置き換えません。
 
+`service_tier`、`safety_identifier`、`prompt_cache_options`、`prompt_cache_retention`、`store` のようなエンドポイント非依存の制御フィールドは、アダプターが OpenAI リクエスト本文をそのまま転送し、上流が受信エンドポイントを提供するルートではモデル能力として宣言せずに受け入れます。プロトコルブリッジ（Anthropic、Gemini）や独自プロトコルへ変換するアダプター（サブスクリプションワーカー）は宣言済みのフィールド集合を維持するため、それらが落とす制御は引き続き拒否されます。`request_parameter_denied` による拒否は引き続き優先されます。`include`、`truncation`、`max_tool_calls`、`text`、`stream_options` は Responses 専用のため、従来どおりプロファイル設定で制御します（レガシー橋接では理解できない可能性があるため）。`store` は Responses のリクエスト封筒の一部として `/v1/responses` では以前から受け入れられており、`/v1/chat/completions` でも同じ扱いになりました。
+
 GPT-6 Sol／Luna 系のカタログにはこの設定が含まれますが、既存のインポート済みインベントリは自動更新されません。プロファイル未設定の既存ルートでは従来のプロトコルブリッジを維持します。意味評価器が無効で Jev が決定的フォールバックを使う場合も准入検査は実行されます。既存 Jev ルートのアップグレード前に Provider モデルと代表的なリクエストを確認し、特に空のパラメーター宣言を点検してください。既存項目は他の metadata と設定価格を保持して更新します。再インポートは価格と状態を含む Provider モデルのレコードを置き換えるため、metadata だけの更新として使用しないでください。他のプロバイダーには検証済みの宣言を使い、OpenAI 形式の JSON を受け付けるだけでこの設定に対応すると推測しないでください。
 
-管理者監査の action `routing.jev_admission` は候補除外を記録します。候補または固定ルート、固定理由コード、認識済みパラメーター名だけを記録し、未知の名前は `unknown` に置換します。プロンプト、リクエスト値、認証情報、完全なペイロードは含めません。理由には `parameter_not_declared`、`sampling_reasoning_conflict`、`parameter_endpoint_mismatch` があります。公開エラーは `jev_no_eligible_candidates`（503）または `jev_previous_route_unavailable`（409）のままで、候補インベントリは公開しません。
+管理者監査の action `routing.jev_admission` は候補除外を記録します。候補または固定ルート、固定理由コード、認識済みパラメーター名だけを記録し、未知の名前は `unknown` に置換します。プロンプト、リクエスト値、認証情報、完全なペイロードは含めません。理由には `parameter_not_declared`、`sampling_reasoning_conflict`、`parameter_endpoint_mismatch` があります。公開エラーは `jev_no_eligible_candidates`（503）または `jev_previous_route_unavailable`（409）のままで、候補インベントリは公開しません。`jev_no_eligible_candidates` の応答には `details` が付き、`stage` は `jev_admission`、`upstream_attempted` は `false`、`reasons` は拒否された全候補の理由とパラメーターをまとめた配列です。各項目は `candidate_count` を持ち、パラメーター名で並び、十件を超えると `truncated: true` で打ち切られます。監査イベントにも同じ要約を候補ごとの詳細と並べて記録します。
 
 ### スコープルーティングポリシー
 
@@ -361,6 +363,16 @@ GPT-6 Sol／Luna 系のカタログにはこの設定が含まれますが、既
 
 「Request Logs」の各行には Token 合計と外部請求額が表示されます。グローバル運用の可視権限を持つ管理者は、選択された Provider モデルから算出した実コストも詳細パネルで確認できます。その他のユーザーには、このコストフィールドは返されません。上流が返した場合、詳細パネルにはキャッシュ読み取り、キャッシュ書き込み、音声入力 Token、および推論、音声、採用予測、却下予測の出力 Token が保持されます。Provider が返さない項目は 0 と表示されます。入力・出力の合計には各詳細項目がすでに含まれるため、詳細値を合計へ再加算しないでください。
 
+## 呼び出し元によるキャンセル
+
+確認された呼び出し元の切断は、リクエストと実行済みの試行に `499/request_cancelled` として記録されます。分類には、元の呼び出し元コンテキストのキャンセルと、キャンセルまたは識別可能な切断エラーの両方が必要です。内部キャンセル、調整リースの喪失、型付きのプロバイダーまたはガードレールの失敗、タイムアウトは引き続き対処すべきエラーです。正常完了後に呼び出し元がキャンセルしても成功結果は変わりません。キャンセルはプロバイダーのフェイルオーバーや推論強度の再試行を起こさず、プロバイダーのサーキットブレーカーを悪化させたり復旧させたりしません。送信済みの SSE レスポンスは元の HTTP ステータスを保持します。記録上の 499 でレスポンスを置き換えたり、成功を示す終端マーカーを追加したりしません。
+
+正確な `499/request_cancelled` の組み合わせだけが、リクエストログのエラー表示と、運用上の使用量、API Key、使用量レポートのエラー件数から除外されます。これらのリクエストは総トラフィック、レイテンシー、トークン、費用の集計に残りますが、成功件数には含まれません。**リクエストログ > すべて** で `request_cancelled` を検索すると確認できます。`499` を検索すると、引き続きエラーとして扱われる他の 499 結果も表示されます。過去の記録は変更されません。アダプターがすでに報告した使用量のみを保持し、上流の使用量フレームが届く前に消費されたトークンは推定しません。
+
+キャンセル件数は `sum(tokenhub_gateway_requests_total{status_code="499",error_code="request_cancelled"})`、発生率は `sum(rate(tokenhub_gateway_requests_total{status_code="499",error_code="request_cancelled"}[5m]))` で確認できます。リクエストと試行のメトリクスには結果が残り、バイト送信後にキャンセルされたストリームでは `tokenhub_gateway_stream_interruptions_total{error_code="request_cancelled"}` が増加します。ルートと試行のトレースはステータスとコードを保持し、観測レベルと OpenTelemetry ステータスをエラーにしません。
+
+バージョン付きトークン費用分析 API は既存の `success`/`error` 契約を維持します。キャンセルされた呼び出しは、このエクスポートと関連メトリクスでは引き続き `error` です。これは運用上の失敗件数とは異なり、新しいエクスポート状態は追加しません。既存の Responses ジョブのキャンセルやワーカー喪失の状態遷移は変更されず、`response_cancelled_worker_lost` は引き続き運用上のエラーです。
+
 ## メトリクス
 
 TokenHub は `GET /metrics` で Prometheus メトリクスを公開できます。既定では無効で、有効にするには `TOKENHUB_METRICS_ENABLED=true` を設定してください。無効の間は何も収集されず、エンドポイントは 404 を返します。このエンドポイントは常に認証を要求します。メトリクスにはモデル名、Provider とリソースの識別子、コストが含まれるため、匿名アクセスは許可されません。`Authorization: Bearer <token>` を送信してください。トークンは `TOKENHUB_METRICS_TOKEN` を使用し、未設定の場合は管理者トークンにフォールバックします。Prometheus のスクレイプ設定に管理者資格情報を置かずに済むよう、専用トークンの設定を推奨します。クエリ文字列でのトークン指定はアクセスログに残るため拒否されます。
@@ -374,7 +386,7 @@ TokenHub は `GET /metrics` で Prometheus メトリクスを公開できます�
 | `tokenhub_gateway_routed_requests_total` | counter | 候補を 1 回以上試行した論理リクエスト数。フェイルオーバー深度比率の試行分母です。`provider_type` ラベルは最後に試行した候補です。Provider をまたぐフェイルオーバーでは、深度比率は `provider_type` ではなく `model` で集約してください。 |
 | `tokenhub_gateway_overhead_seconds` | histogram | ゲートウェイ自身のオーバーヘッドの近似値：エンドツーエンド所要時間から invoked な試行の所要時間合計を差し引き、負値は 0 にクリップします。ルーティングに受理されたものの試行前に失敗したリクエストは、その全所要時間をオーバーヘッドとして計上します。画像ジョブの所要時間にはキューの待機が含まれるため、画像のオーバーヘッドは上限値です。 |
 | `tokenhub_gateway_time_to_first_byte_seconds` | histogram | ストリーミングリクエストのクライアント体感・最初のバイトまでのレイテンシ。ローカル受理参照点から測定するため、フェイルオーバー再試行時間も含みます。空 body の 200 レスポンスはストリーム終了時に最初のバイトを記録します。 |
-| `tokenhub_gateway_stream_interruptions_total` | counter | 最初のバイト書き込み後に失敗したストリーミングリクエスト。`error_code` は最終的に分類されたエラーコードです。上流の HTTP レベル障害はそのコードを保持し、トランスポートレベルの障害とクライアント切断はどちらも `internal_error` に集約されます。 |
+| `tokenhub_gateway_stream_interruptions_total` | counter | 最初のバイト書き込み後に失敗したストリーミングリクエスト。`error_code` は最終的に分類されたエラーコードです。上流の HTTP レベル障害はそのコードを保持し、確認された呼び出し元のキャンセルは `request_cancelled`、その他のトランスポートレベルの障害は `internal_error` に集約されます。 |
 | `tokenhub_gateway_requests_in_flight` | gauge | 処理中のモデル API リクエスト数。管理トラフィックとスクレイプは含みません。 |
 | `tokenhub_gateway_tokens_total` | counter | 種別ごとの Token：`prompt`、`completion`、`cached`、`cache_write`、`reasoning`。 |
 | `tokenhub_gateway_cost_usd_total` | counter | Model Directory 価格による統一外部請求見積もり。Provider 実コストは権限付きリクエスト監査にのみ保持され、このメトリクスには含まれません。 |
